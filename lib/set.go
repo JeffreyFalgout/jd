@@ -158,7 +158,7 @@ func (s jsonSet) patch(pathBehind, pathAhead path, oldValues, newValues []JsonNo
 		return newValue, nil
 	}
 	// Unrolled recursive case
-	pe, rest := pathAhead[0], pathAhead[1:]
+	pe, rest := pathAhead.next()
 	var pathObject jsonObject
 	switch t := pe.key.(type) {
 	case setElementPathKey:
@@ -175,7 +175,7 @@ func (s jsonSet) patch(pathBehind, pathAhead path, oldValues, newValues []JsonNo
 			if o, ok := v.(jsonObject); ok {
 				id := o.pathIdent(pathObject, pe.metadata)
 				if id == lookingFor {
-					v.patch(append(pathBehind, pe), rest, oldValues, newValues)
+					v.patch(pathBehind.appendElement(*pe), rest, oldValues, newValues)
 					return s, nil
 				}
 			}

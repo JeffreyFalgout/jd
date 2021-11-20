@@ -15,10 +15,12 @@ type multisetMetadata struct{}
 type setkeysMetadata struct {
 	keys map[string]bool
 }
+type assocInMetadata struct{}
 
 func (setMetadata) is_metadata()      {}
 func (multisetMetadata) is_metadata() {}
 func (setkeysMetadata) is_metadata()  {}
+func (assocInMetadata) is_metadata()  {}
 
 func (m setMetadata) string() string {
 	return "set"
@@ -38,9 +40,14 @@ func (m setkeysMetadata) string() string {
 	return "setkeys=" + strings.Join(ks, ",")
 }
 
+func (m assocInMetadata) string() string {
+	return "assoc-in"
+}
+
 var (
 	MULTISET Metadata = multisetMetadata{}
 	SET      Metadata = setMetadata{}
+	ASSOC_IN Metadata = assocInMetadata{}
 )
 
 func Setkeys(keys ...string) Metadata {
@@ -83,4 +90,15 @@ func getSetkeysMetadata(metadata []Metadata) *setkeysMetadata {
 		}
 	}
 	return nil
+}
+
+func isAssocIn(pathBehind path) bool {
+	for _, pe := range pathBehind {
+		for _, m := range pe.metadata {
+			if m == ASSOC_IN {
+				return true
+			}
+		}
+	}
+	return false
 }

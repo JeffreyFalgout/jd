@@ -17,6 +17,7 @@ import (
 
 const version = "HEAD"
 
+var assocIn = flag.Bool("assoc-in", false, "Generate patches in assoc-in mode which allows them to generate new, empty objects as they're being applied, as necessary.")
 var format = flag.String("f", "", "Diff format (jd, patch)")
 var mset = flag.Bool("mset", false, "Arrays as multisets")
 var output = flag.String("o", "", "Output file")
@@ -125,6 +126,9 @@ func parseMetadata() ([]jd.Metadata, error) {
 		}
 		metadata = append(metadata, jd.Setkeys(keys...))
 	}
+	if *assocIn {
+		metadata = append(metadata, jd.ASSOC_IN)
+	}
 	return metadata, nil
 }
 
@@ -150,6 +154,7 @@ func printUsageAndExit() {
 		`  -t=FORMATS Translate FILE1 between FORMATS. Supported formats are "jd",`,
 		`             "patch" (RFC 6902), "json" and "yaml". FORMATS are provided`,
 		`             as a pair separated by "2". E.g. "yaml2json" or "jd2patch".`,
+		`  -assoc-in  Generate patches in assoc-in mode. assoc-in mode allows patches to create new, empty objects as necessary.`,
 		``,
 		`Examples:`,
 		`  jd a.json b.json`,

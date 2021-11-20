@@ -62,6 +62,28 @@ func (v voidNode) Patch(d Diff) (JsonNode, error) {
 
 func (v voidNode) patch(pathBehind, pathAhead path, oldValues, newValues []JsonNode) (JsonNode, error) {
 	if len(pathAhead) != 0 {
+		if isAssocIn(pathBehind) {
+			next, rest := pathAhead.next()
+			nextNode, err := voidNode{}.patch(pathBehind.appendElement(*next), rest, oldValues, newValues)
+			if err != nil {
+				return nil, err
+			}
+			var node JsonNode
+			switch t := next.key.(type) {
+			case indexPathKey, setElementPathKey, specificSetElementPathKey:
+				arr := jsonArray{}
+				arr = append(arr, nextNode)
+				node = arr
+			case stringPathKey:
+				obj := jsonObject{}
+				obj.properties = map[string]JsonNode{
+					string(t): nextNode,
+				}
+				node = obj
+			}
+			return node, nil
+		}
+
 		return patchErrExpectColl(v, pathBehind[len(pathBehind)-1])
 	}
 	if len(oldValues) > 1 || len(newValues) > 1 {
@@ -69,6 +91,9 @@ func (v voidNode) patch(pathBehind, pathAhead path, oldValues, newValues []JsonN
 	}
 	oldValue := singleValue(oldValues)
 	newValue := singleValue(newValues)
+	if isAssocIn(pathBehind) {
+		return newValue, nil
+	}
 	if !v.Equals(oldValue) {
 		return patchErrExpectValue(oldValue, v, pathBehind)
 	}

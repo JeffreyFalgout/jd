@@ -115,7 +115,7 @@ func (l jsonList) patch(pathBehind, pathAhead path, oldValues, newValues []JsonN
 		return newValue, nil
 	}
 	// Recursive case
-	pe, rest := pathAhead[0], pathAhead[1:]
+	pe, rest := pathAhead.next()
 	jn, ok := pe.key.(indexPathKey)
 	if !ok {
 		return nil, fmt.Errorf(
@@ -132,7 +132,7 @@ func (l jsonList) patch(pathBehind, pathAhead path, oldValues, newValues []JsonN
 	if len(l) > i {
 		nextNode = l[i]
 	}
-	patchedNode, err := nextNode.patch(append(pathBehind, pe), rest, oldValues, newValues)
+	patchedNode, err := nextNode.patch(pathBehind.appendElement(*pe), rest, oldValues, newValues)
 	if err != nil {
 		return nil, err
 	}

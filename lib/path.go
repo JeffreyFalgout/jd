@@ -17,11 +17,15 @@ type pathKey interface {
 	isPathKey()
 }
 
+type metadataOnlyPathKey struct{}
 type stringPathKey string
 type indexPathKey int
 type setElementPathKey struct{}
 type specificSetElementPathKey struct{ obj jsonObject }
 
+func (m metadataOnlyPathKey) String() string {
+	return ""
+}
 func (s stringPathKey) String() string {
 	return string(s)
 }
@@ -35,13 +39,43 @@ func (s specificSetElementPathKey) String() string {
 	return s.obj.Json()
 }
 
-func (s stringPathKey) isPathKey()             {}
-func (i indexPathKey) isPathKey()              {}
-func (s setElementPathKey) isPathKey()         {}
-func (s specificSetElementPathKey) isPathKey() {}
+func (metadataOnlyPathKey) isPathKey()       {}
+func (stringPathKey) isPathKey()             {}
+func (indexPathKey) isPathKey()              {}
+func (setElementPathKey) isPathKey()         {}
+func (specificSetElementPathKey) isPathKey() {}
 
 func (p path) append(k pathKey, m ...Metadata) path {
-	return append(p, pathElement{k, m})
+	return p.appendElement(pathElement{k, m})
+}
+
+func (p path) appendMetadata(m ...Metadata) path {
+	return p.appendElement(pathElement{metadataOnlyPathKey{}, m})
+}
+
+func (p path) appendElement(pe pathElement) (ret path) {
+	if len(p) == 0 {
+		return append(p, pe)
+	}
+	if _, ok := pe.key.(metadataOnlyPathKey); ok {
+		return append(p, pe)
+	}
+	last := p[len(p)-1]
+	if _, ok := last.key.(metadataOnlyPathKey); ok {
+		return append(p[:len(p)-1], pathElement{pe.key, append(last.metadata, pe.metadata...)})
+	}
+	return append(p, pe)
+}
+
+func (p path) next() (*pathElement, path) {
+	if len(p) == 0 {
+		return nil, nil
+	}
+	pe := p[0]
+	if _, ok := pe.key.(metadataOnlyPathKey); ok {
+		return nil, nil
+	}
+	return &pe, p[1:]
 }
 
 func (p path) clone() path {
@@ -52,22 +86,30 @@ func (p path) clone() path {
 
 func (p path) String() string {
 	arr := jsonArray{}
+	var meta jsonArray
+	appendMetadata := func() {
+		if len(meta) > 0 {
+			arr = append(arr, meta)
+			meta = nil
+		}
+	}
 	for _, pe := range p {
-		var meta jsonArray
 		for _, m := range pe.metadata {
 			meta = append(meta, jsonString(m.string()))
 		}
-		if len(meta) > 0 {
-			arr = append(arr, meta)
-		}
 		switch t := pe.key.(type) {
+		case metadataOnlyPathKey:
 		case stringPathKey:
+			appendMetadata()
 			arr = append(arr, jsonString(string(t)))
 		case indexPathKey:
+			appendMetadata()
 			arr = append(arr, jsonNumber(int(t)))
 		case setElementPathKey:
+			appendMetadata()
 			arr = append(arr, jsonObject{})
 		case specificSetElementPathKey:
+			appendMetadata()
 			arr = append(arr, t.obj)
 		}
 	}
@@ -97,6 +139,9 @@ func pathFromString(s string) (path, error) {
 					}
 					if string(s) == MULTISET.string() {
 						meta = append(meta, MULTISET)
+					}
+					if string(s) == ASSOC_IN.string() {
+						meta = append(meta, ASSOC_IN)
 					}
 				}
 				// Ignore unrecognized metadata.
