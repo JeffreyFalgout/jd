@@ -83,12 +83,11 @@ func NewJsonNode(n interface{}) (JsonNode, error) {
 }
 
 func nodeList(n ...JsonNode) []JsonNode {
-	l := []JsonNode{}
 	if len(n) == 0 {
-		return l
+		return nil
 	}
 	if n[0].Equals(voidNode{}) {
-		return l
+		return nil
 	}
-	return append(l, n...)
+	return n
 }

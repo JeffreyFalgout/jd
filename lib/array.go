@@ -52,7 +52,10 @@ func (a jsonArray) Patch(d Diff) (JsonNode, error) {
 }
 
 func (a jsonArray) patch(pathBehind, pathAhead path, oldValues, newValues []JsonNode) (JsonNode, error) {
-	_, metadata, _ := pathAhead.next()
-	n := dispatch(a, metadata)
+	var m []Metadata
+	if len(pathAhead) > 0 {
+		m = pathAhead[0].metadata
+	}
+	n := dispatch(a, m)
 	return n.patch(pathBehind, pathAhead, oldValues, newValues)
 }

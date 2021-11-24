@@ -68,7 +68,7 @@ func (a1 jsonList) diff(n JsonNode, path path, metadata []Metadata) Diff {
 	for i := 0; i < maxLen; i++ {
 		a1Has := i < len(a1)
 		a2Has := i < len(a2)
-		subPath := append(path, jsonNumber(i))
+		subPath := path.append(indexPathKey(i))
 		if a1Has && a2Has {
 			n1 := dispatch(a1[i], metadata)
 			n2 := dispatch(a2[i], metadata)
@@ -115,11 +115,11 @@ func (l jsonList) patch(pathBehind, pathAhead path, oldValues, newValues []JsonN
 		return newValue, nil
 	}
 	// Recursive case
-	n, _, rest := pathAhead.next()
-	jn, ok := n.(jsonNumber)
+	pe, rest := pathAhead[0], pathAhead[1:]
+	jn, ok := pe.key.(indexPathKey)
 	if !ok {
 		return nil, fmt.Errorf(
-			"Invalid path element %T. Expected float64.", n)
+			"Invalid path element %T. Expected int.", pe.key)
 	}
 	i := int(jn)
 
@@ -132,7 +132,7 @@ func (l jsonList) patch(pathBehind, pathAhead path, oldValues, newValues []JsonN
 	if len(l) > i {
 		nextNode = l[i]
 	}
-	patchedNode, err := nextNode.patch(append(pathBehind, n), rest, oldValues, newValues)
+	patchedNode, err := nextNode.patch(append(pathBehind, pe), rest, oldValues, newValues)
 	if err != nil {
 		return nil, err
 	}

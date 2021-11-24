@@ -77,43 +77,11 @@ func (s1 jsonSet) diff(n JsonNode, path path, metadata []Metadata) Diff {
 		}
 		return append(d, e)
 	}
-	s1Map := make(map[[8]byte]JsonNode)
-	for _, v := range s1 {
-		var hc [8]byte
-		if o, ok := v.(jsonObject); ok {
-			// Hash objects by their identity.
-			hc = o.ident(metadata)
-		} else {
-			// Everything else by full content.
-			hc = v.hashCode(metadata)
-		}
-		s1Map[hc] = v
-	}
-	s2Map := make(map[[8]byte]JsonNode)
-	for _, v := range s2 {
-		var hc [8]byte
-		if o, ok := v.(jsonObject); ok {
-			// Hash objects by their identity.
-			hc = o.ident(metadata)
-		} else {
-			// Everything else by full content.
-			hc = v.hashCode(metadata)
-		}
-		s2Map[hc] = v
-	}
-	s1Hashes := make(hashCodes, 0)
-	for hc := range s1Map {
-		s1Hashes = append(s1Hashes, hc)
-	}
-	sort.Sort(s1Hashes)
-	s2Hashes := make(hashCodes, 0)
-	for hc := range s2Map {
-		s2Hashes = append(s2Hashes, hc)
-	}
-	sort.Sort(s2Hashes)
-	o, _ := NewJsonNode(map[string]interface{}{})
+	s1Map, s1Hashes := diffMap(s1, metadata)
+	s2Map, s2Hashes := diffMap(s2, metadata)
+
 	e := DiffElement{
-		Path:      path.appendIndex(o.(jsonObject), metadata).clone(),
+		Path:      path.append(setElementPathKey{}, metadata...).clone(),
 		OldValues: nodeList(),
 		NewValues: nodeList(),
 	}
@@ -122,19 +90,21 @@ func (s1 jsonSet) diff(n JsonNode, path path, metadata []Metadata) Diff {
 		if !ok {
 			// Deleted value.
 			e.OldValues = append(e.OldValues, s1Map[hc])
-		} else {
-			// Changed value.
-			o1, isObject1 := s1Map[hc].(jsonObject)
-			o2, isObject2 := n2.(jsonObject)
-			if isObject1 && isObject2 {
-				// Sub diff objects with same identity.
-				p := path.appendIndex(o1, metadata)
-				subDiff := o1.diff(o2, p, metadata)
-				for _, subElement := range subDiff {
-					d = append(d, subElement)
-				}
+			continue
+		}
+		// Changed value.
+		o1, isObject1 := s1Map[hc].(jsonObject)
+		o2, isObject2 := n2.(jsonObject)
+		if isObject1 && isObject2 {
+			// Sub diff objects with same identity.
+			p := path.append(specificSetElementPathKey{o1}, metadata...)
+			subDiff := o1.diff(o2, p, metadata)
+			for _, subElement := range subDiff {
+				d = append(d, subElement)
 			}
 		}
+		// else if isObject1 != isObject2: We have a hash collision between an object and a non-object, which is unlikely
+		// else if !isObject1 && !isObject2: Non-objects are hashed by value, so they're equal and there's no diff.
 	}
 	for _, hc := range s2Hashes {
 		_, ok := s1Map[hc]
@@ -147,6 +117,27 @@ func (s1 jsonSet) diff(n JsonNode, path path, metadata []Metadata) Diff {
 		d = append(d, e)
 	}
 	return d
+}
+
+func diffMap(s jsonSet, m []Metadata) (map[[8]byte]JsonNode, hashCodes) {
+	res := make(map[[8]byte]JsonNode)
+	for _, v := range s {
+		var hc [8]byte
+		if o, ok := v.(jsonObject); ok {
+			// Hash objects by their identity.
+			hc = o.ident(m)
+		} else {
+			// Everything else by full content.
+			hc = v.hashCode(m)
+		}
+		res[hc] = v
+	}
+	var hashes hashCodes
+	for hc := range res {
+		hashes = append(hashes, hc)
+	}
+	sort.Sort(hashes)
+	return res, hashes
 }
 
 func (s jsonSet) Patch(d Diff) (JsonNode, error) {
@@ -167,25 +158,29 @@ func (s jsonSet) patch(pathBehind, pathAhead path, oldValues, newValues []JsonNo
 		return newValue, nil
 	}
 	// Unrolled recursive case
-	n, metadata, rest := pathAhead.next()
-	pathObject, ok := n.(jsonObject)
-	if !ok {
+	pe, rest := pathAhead[0], pathAhead[1:]
+	var pathObject jsonObject
+	switch t := pe.key.(type) {
+	case setElementPathKey:
+	case specificSetElementPathKey:
+		pathObject = t.obj
+	default:
 		return nil, fmt.Errorf(
-			"Invalid path element %v. Expected jsonObject.", n)
+			"Invalid path element %v. Expected jsonObject.", t)
 	}
 	if len(rest) > 0 {
 		// Recurse into a specific object.
-		lookingFor := pathObject.ident(metadata)
+		lookingFor := pathObject.ident(pe.metadata)
 		for _, v := range s {
 			if o, ok := v.(jsonObject); ok {
-				id := o.pathIdent(pathObject, metadata)
+				id := o.pathIdent(pathObject, pe.metadata)
 				if id == lookingFor {
-					v.patch(append(pathBehind, n), rest, oldValues, newValues)
+					v.patch(append(pathBehind, pe), rest, oldValues, newValues)
 					return s, nil
 				}
 			}
 		}
-		return nil, fmt.Errorf("Invalid diff. Expected object with id %v but found none", pathObject.Json(metadata...))
+		return nil, fmt.Errorf("Invalid diff. Expected object with id %v but found none", pathObject.Json(pe.metadata...))
 	}
 	// Patch set
 	aMap := make(map[[8]byte]JsonNode)
@@ -193,10 +188,10 @@ func (s jsonSet) patch(pathBehind, pathAhead path, oldValues, newValues []JsonNo
 		var hc [8]byte
 		if o, ok := v.(jsonObject); ok {
 			// Hash objects by their identitiy.
-			hc = o.ident(metadata)
+			hc = o.ident(pe.metadata)
 		} else {
 			// Everything else by full content.
-			hc = v.hashCode(metadata)
+			hc = v.hashCode(pe.metadata)
 		}
 		aMap[hc] = v
 	}
@@ -204,21 +199,21 @@ func (s jsonSet) patch(pathBehind, pathAhead path, oldValues, newValues []JsonNo
 		var hc [8]byte
 		if o, ok := v.(jsonObject); ok {
 			// Find objects by their identitiy.
-			hc = o.ident(metadata)
+			hc = o.ident(pe.metadata)
 		} else {
 			// Everything else by full content.
-			hc = v.hashCode(metadata)
+			hc = v.hashCode(pe.metadata)
 		}
 		toDelete, ok := aMap[hc]
 		if !ok {
 			return nil, fmt.Errorf(
 				"Invalid diff. Expected %v at %v but found nothing.",
-				v.Json(metadata...), pathBehind)
+				v.Json(pe.metadata...), pathBehind)
 		}
-		if !toDelete.Equals(v, metadata...) {
+		if !toDelete.Equals(v, pe.metadata...) {
 			return nil, fmt.Errorf(
 				"Invalid diff. Expected %v at %v but found %v.",
-				v.Json(metadata...), pathBehind, toDelete.Json(metadata...))
+				v.Json(pe.metadata...), pathBehind, toDelete.Json(pe.metadata...))
 
 		}
 		delete(aMap, hc)
@@ -227,10 +222,10 @@ func (s jsonSet) patch(pathBehind, pathAhead path, oldValues, newValues []JsonNo
 		var hc [8]byte
 		if o, ok := v.(jsonObject); ok {
 			// Hash objects by their identitiy.
-			hc = o.ident(metadata)
+			hc = o.ident(pe.metadata)
 		} else {
 			// Everything else by full content.
-			hc = v.hashCode(metadata)
+			hc = v.hashCode(pe.metadata)
 		}
 		aMap[hc] = v
 	}

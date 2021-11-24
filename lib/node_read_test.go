@@ -1,6 +1,7 @@
 package jd
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -47,7 +48,7 @@ func TestReadDiff(t *testing.T) {
 	checkReadDiff(t,
 		Diff{
 			DiffElement{
-				Path:      p("a", 1.0, "b"),
+				Path:      p("a", 1, "b"),
 				OldValues: []JsonNode{jsonNumber(1)},
 				NewValues: []JsonNode{jsonNumber(2)},
 			},
@@ -135,11 +136,25 @@ func checkReadDiffError(t *testing.T, diffLines ...string) {
 func p(elements ...interface{}) path {
 	var path path
 	for _, e := range elements {
-		n, err := NewJsonNode(e)
+		k, err := key(e)
 		if err != nil {
 			panic(err)
 		}
-		path = append(path, n)
+		path = path.append(k)
 	}
 	return path
+}
+
+func key(k interface{}) (pathKey, error) {
+	switch t := k.(type) {
+	case string:
+		return stringPathKey(t), nil
+	case int:
+		return indexPathKey(t), nil
+	case struct{}:
+		return setElementPathKey(t), nil
+	case jsonObject:
+		return specificSetElementPathKey{t}, nil
+	}
+	return nil, fmt.Errorf("unsupported type %T", k)
 }

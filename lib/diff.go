@@ -1,7 +1,7 @@
 package jd
 
 type DiffElement struct {
-	Path      []JsonNode
+	Path      path
 	OldValues []JsonNode
 	NewValues []JsonNode
 }

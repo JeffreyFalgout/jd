@@ -79,10 +79,8 @@ func (a1 jsonMultiset) diff(n JsonNode, path path, metadata []Metadata) Diff {
 		a2Counts[hc]++
 		a2Map[hc] = v
 	}
-	// TODO: cast directly to jsonObject when jsonObject drops idKeys.
-	o, _ := NewJsonNode(map[string]interface{}{})
 	e := DiffElement{
-		Path:      path.appendIndex(o.(jsonObject), metadata).clone(),
+		Path:      path.append(setElementPathKey{}, metadata...).clone(),
 		OldValues: nodeList(),
 		NewValues: nodeList(),
 	}
@@ -146,25 +144,21 @@ func (a jsonMultiset) patch(pathBehind, pathAhead path, oldValues, newValues []J
 		return newValue, nil
 	}
 	// Unrolled recursive case
-	n, metadata, _ := pathAhead.next()
-	o, ok := n.(jsonObject)
+	pe := pathAhead[0]
+	_, ok := pe.key.(setElementPathKey)
 	if !ok {
 		return nil, fmt.Errorf(
-			"Invalid path element %v. Expected map[string]interface{}.", n)
-	}
-	if len(o.properties) != 0 {
-		return nil, fmt.Errorf(
-			"Invalid path element %v. Expected empty object.", n)
+			"Invalid path element %v. Expected map[string]interface{}.", pe.key)
 	}
 	aCounts := make(map[[8]byte]int)
 	aMap := make(map[[8]byte]JsonNode)
 	for _, v := range a {
-		hc := v.hashCode(metadata)
+		hc := v.hashCode(pe.metadata)
 		aCounts[hc]++
 		aMap[hc] = v
 	}
 	for _, v := range oldValues {
-		hc := v.hashCode(metadata)
+		hc := v.hashCode(pe.metadata)
 		aCounts[hc]--
 		aMap[hc] = v
 	}
@@ -172,11 +166,11 @@ func (a jsonMultiset) patch(pathBehind, pathAhead path, oldValues, newValues []J
 		if count < 0 {
 			return nil, fmt.Errorf(
 				"Invalid diff. Expected %v at %v but found nothing.",
-				aMap[hc].Json(metadata...), pathBehind)
+				aMap[hc].Json(pe.metadata...), pathBehind)
 		}
 	}
 	for _, v := range newValues {
-		hc := v.hashCode(metadata)
+		hc := v.hashCode(pe.metadata)
 		aCounts[hc]++
 		aMap[hc] = v
 	}

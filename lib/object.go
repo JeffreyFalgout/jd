@@ -152,12 +152,12 @@ func (o1 jsonObject) diff(n JsonNode, path path, metadata []Metadata) Diff {
 		v1 := o1.properties[k1]
 		if v2, ok := o2.properties[k1]; ok {
 			// Both keys are present
-			subDiff := v1.diff(v2, append(path, jsonString(k1)), metadata)
+			subDiff := v1.diff(v2, path.append(stringPathKey(k1)), metadata)
 			d = append(d, subDiff...)
 		} else {
 			// O2 missing key
 			e := DiffElement{
-				Path:      append(path, jsonString(k1)).clone(),
+				Path:      path.append(stringPathKey(k1)).clone(),
 				OldValues: nodeList(v1),
 				NewValues: nodeList(),
 			}
@@ -169,7 +169,7 @@ func (o1 jsonObject) diff(n JsonNode, path path, metadata []Metadata) Diff {
 		if _, ok := o1.properties[k2]; !ok {
 			// O1 missing key
 			e := DiffElement{
-				Path:      append(path, jsonString(k2)).clone(),
+				Path:      path.append(stringPathKey(k2)).clone(),
 				OldValues: nodeList(),
 				NewValues: nodeList(v2),
 			}
@@ -197,14 +197,14 @@ func (o jsonObject) patch(pathBehind, pathAhead path, oldValues, newValues []Jso
 		return newValue, nil
 	}
 	// Recursive case
-	n, _, rest := pathAhead.next()
-	pe, ok := n.(jsonString)
+	pe, rest := pathAhead[0], pathAhead[1:]
+	k, ok := pe.key.(stringPathKey)
 	if !ok {
 		return nil, fmt.Errorf(
 			"Found %v at %v. Expected JSON object.",
 			o.Json(), pathBehind)
 	}
-	nextNode, ok := o.properties[string(pe)]
+	nextNode, ok := o.properties[string(k)]
 	if !ok {
 		nextNode = voidNode{}
 	}
@@ -214,10 +214,10 @@ func (o jsonObject) patch(pathBehind, pathAhead path, oldValues, newValues []Jso
 	}
 	if isVoid(patchedNode) {
 		// Delete a pair
-		delete(o.properties, string(pe))
+		delete(o.properties, string(k))
 	} else {
 		// Add or replace a pair
-		o.properties[string(pe)] = patchedNode
+		o.properties[string(k)] = patchedNode
 	}
 	return o, nil
 }

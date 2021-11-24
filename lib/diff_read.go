@@ -65,16 +65,12 @@ func readDiff(s string) (Diff, error) {
 				}
 				diff = append(diff, de)
 			}
-			p, err := ReadJsonString(dl[1:])
+			p, err := pathFromString(dl[1:])
 			if err != nil {
-				return errorAt(i, "Invalid path. %v", err.Error())
-			}
-			pa, ok := p.(jsonArray)
-			if !ok {
-				return errorAt(i, "Invalid path. Want JSON list. Got %T.", p)
+				return errorAt(i, "%v", err.Error())
 			}
 			de = DiffElement{
-				Path:      path(pa).clone(),
+				Path:      p.clone(),
 				OldValues: []JsonNode{},
 				NewValues: []JsonNode{},
 			}
@@ -116,12 +112,16 @@ func readDiff(s string) (Diff, error) {
 func checkDiffElement(de DiffElement) string {
 	if len(de.NewValues) > 1 || len(de.OldValues) > 1 {
 		// Must be a set.
-		emptyObject, _ := NewJsonNode(map[string]interface{}{})
-		if len(de.Path) == 0 || !de.Path[len(de.Path)-1].Equals(emptyObject) {
+		if len(de.Path) == 0 || !isSetElementPathKey(de.Path[len(de.Path)-1]) {
 			return "Expected path to end with {} for sets."
 		}
 	}
 	return ""
+}
+
+func isSetElementPathKey(pe pathElement) bool {
+	_, ok := pe.key.(setElementPathKey)
+	return ok
 }
 
 func errorAt(lineZeroIndex int, err string, i ...interface{}) (Diff, error) {
