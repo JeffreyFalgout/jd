@@ -62,7 +62,7 @@ func (p path) appendElement(pe pathElement) (ret path) {
 	}
 	last := p[len(p)-1]
 	if _, ok := last.key.(metadataOnlyPathKey); ok {
-		return append(p[:len(p)-1], pathElement{pe.key, append(last.metadata, pe.metadata...)})
+		return append(p.clone()[:len(p)-1], pathElement{pe.key, append(last.metadata, pe.metadata...)})
 	}
 	return append(p, pe)
 }
